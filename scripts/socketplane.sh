@@ -57,6 +57,9 @@ COMMANDS:
     network list
             List all created networks
 
+    network attach [-n <name>] <container_id>
+            Attach network to a container already created
+
     network info <name>
             Display information about a given network
 
@@ -396,6 +399,26 @@ info() {
     fi
 }
 
+network_attach() {
+    network=""
+    if [ $1 = '-n' ]; then
+        network=$2
+        shift 2
+    fi
+
+    cName=$1
+
+    cid=$(docker inspect --format='{{ .Id }}' $cName)
+    cPid=$(docker inspect --format='{{ .State.Pid }}' $cid)
+
+    json=$(curl -s -X POST http://localhost:6675/v0.1/connections -d "{ \"container_id\": \"$cid\", \"container_name\": \"$cName\", \"container_pid\": \"$cPid\", \"network\": \"$network\" }")
+    result=$(echo $json | sed 's/[,{}]/\n/g' | sed 's/^".*":"\(.*\)"/\1/g' | awk -v RS="" '{ print $7, $8, $9, $10, $11 }')
+
+    attach $result $cPid
+
+    echo $result
+}
+
 container_run() {
     network=""
     if [ $1 = '-n' ]; then
@@ -619,6 +642,10 @@ case "$1" in
             delete)
                 shift
                 network_delete $@
+                ;;
+            attach)
+                shift
+                network_attach $@
                 ;;
             *)
                 log_fatal "Unknown Command"
